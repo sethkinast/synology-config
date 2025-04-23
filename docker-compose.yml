@@ -1,0 +1,187 @@
+services:
+  caddy:
+    container_name: caddy
+    image: homeall/caddy-reverse-proxy-cloudflare:latest
+    ports:
+      - 80:80
+      - 443:443
+    environment:
+      - CADDY_INGRESS_NETWORKS=caddy
+    labels:
+      caddy.email: $CF_EMAIL
+      caddy.acme_dns: "cloudflare $CF_API_TOKEN"
+      caddy_0: ${HOSTNAME}.${DOMAIN}
+      caddy_0.reverse_proxy: ${HOSTNAME}.${DOMAIN}:5000
+    networks:
+      - caddy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - caddyData:/data
+    restart: unless-stopped
+
+  # Radarr - https://hotio.dev/containers/radarr/
+  radarr:
+    container_name: radarr
+    image: ghcr.io/hotio/radarr:latest
+    extends:
+      file: xbase.yml
+      service: x-base
+    labels:
+      caddy: radarr.${DOMAIN}
+      caddy.reverse_proxy: "{{upstreams http 7878}}"
+    networks:
+      - caddy
+    volumes:
+      - ${DOCKERCONFDIR}/radarr:/config
+      - ${DOCKERSTORAGEDIR}:/data
+
+  # Sonarr - https://hotio.dev/containers/sonarr/
+  sonarr:
+    container_name: sonarr
+    image: ghcr.io/hotio/sonarr:latest
+    extends:
+      file: xbase.yml
+      service: x-base
+    labels:
+      caddy: sonarr.${DOMAIN}
+      caddy.reverse_proxy: "{{upstreams 8989}}"
+    networks:
+      - caddy
+    volumes:
+      - ${DOCKERCONFDIR}/sonarr:/config
+      - ${DOCKERSTORAGEDIR}:/data
+
+  # Bazarr - https://hotio.dev/containers/bazarr/
+  bazarr:
+    container_name: bazarr
+    image: ghcr.io/hotio/bazarr:release
+    extends:
+      file: xbase.yml
+      service: x-base
+    labels:
+      caddy: bazarr.${DOMAIN}
+      caddy.reverse_proxy: "{{upstreams 6767}}"
+    networks:
+      - caddy
+    volumes:
+      - ${DOCKERCONFDIR}/bazarr:/config
+      - ${DOCKERSTORAGEDIR}/media:/data/media
+
+  # qBittorrent - https://hotio.dev/containers/qbittorrent
+  qbittorrent:
+    container_name: qbittorrent
+    image: ghcr.io/hotio/qbittorrent:release
+    extends:
+      file: xbase.yml
+      service: x-base
+    labels:
+      caddy: qbit.${DOMAIN}
+      caddy.reverse_proxy: "{{upstreams $QBITTORRENT_WEBUI_PORT}}"
+    networks:
+      - caddy
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+      - net.ipv6.conf.all.disable_ipv6=1 # Optional, if you want to use ipv6, remove this line. If you keep this line, make sure there is no ipv6 in your wg0.conf.
+    environment:
+      - VPN_ENABLED=${VPN_ENABLED}
+      - VPN_CONF=wg0-fix
+      - VPN_PROVIDER=generic
+      - VPN_LAN_NETWORK=${VPN_LAN_NETWORK}
+      - VPN_NAMESERVERS=wg
+      - WEBUI_PORTS=${QBITTORRENT_WEBUI_PORT}/tcp,${QBITTORRENT_WEBUI_PORT}/udp
+    volumes:
+      - ${DOCKERCONFDIR}/qbittorrent:/config:rw
+      - ${DOCKERSTORAGEDIR}/torrents:/data/torrents:rw
+
+  # Prowlarr - https://hotio.dev/containers/prowlarr/
+  prowlarr:
+    container_name: prowlarr
+    image: ghcr.io/hotio/prowlarr:release
+    extends:
+      file: xbase.yml
+      service: x-base
+    labels:
+      caddy: prowlarr.${DOMAIN}
+      caddy.reverse_proxy: "{{upstreams 9696}}"
+    networks:
+      - caddy
+    environment:
+      - ARGS=
+    volumes:
+      - ${DOCKERCONFDIR}/prowlarr:/config:rw
+
+  # unpackerr - https://hub.docker.com/r/hotio/unpackerr
+  unpackerr:
+    container_name: unpackerr
+    image: ghcr.io/hotio/unpackerr:release
+    extends:
+      file: xbase.yml
+      service: x-base
+    volumes:
+      - ${DOCKERCONFDIR}/unpackerr:/config
+      - ${DOCKERSTORAGEDIR}:/data
+    security_opt:
+      - no-new-privileges:true
+
+  # Readarr - https://hotio.dev/containers/readarr/
+  readarr:
+    container_name: readarr
+    image: ghcr.io/hotio/readarr
+    extends:
+      file: xbase.yml
+      service: x-base
+    labels:
+      caddy: readarr.${DOMAIN}
+      caddy.reverse_proxy: "{{upstreams 8787}}"
+    networks:
+      - caddy
+    volumes:
+      - ${DOCKERCONFDIR}/readarr:/config
+      - ${DOCKERSTORAGEDIR}:/data
+
+  # Jellyfin - https://hotio.dev/containers/jellyfin/
+  jellyfin:
+    container_name: jellyfin
+    image: ghcr.io/hotio/jellyfin:release
+    extends:
+      file: xbase.yml
+      service: x-base
+    labels:
+      caddy: jellyfin.${DOMAIN}
+      caddy.reverse_proxy: "{{upstreams 8096}}"
+      # This fixes the Jellyfin app on WebOS
+      caddy.header: -X-Frame-Options
+      caddy.header.defer:
+    networks:
+      - caddy
+    volumes:
+      - ${DOCKERCONFDIR}/jellyfin:/config
+      - ${DOCKERSTORAGEDIR}/media:/data/media
+    devices:
+      - /dev/dri:/dev/dri
+
+  jellyseerr:
+    container_name: jellyseerr
+    image: ghcr.io/hotio/jellyseerr
+    extends:
+      file: xbase.yml
+      service: x-base
+    labels:
+      caddy: jellyseerr.${DOMAIN}
+      caddy.reverse_proxy: "{{upstreams 5055}}"
+    networks:
+      - caddy
+    volumes:
+      - ${DOCKERCONFDIR}/jellyseerr:/config
+      - ${DOCKERSTORAGEDIR}/media:/data/media
+
+networks:
+  caddy:
+    external: true
+
+volumes:
+  caddyData:
