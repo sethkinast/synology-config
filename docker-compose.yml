@@ -1,19 +1,24 @@
 services:
   caddy:
     container_name: caddy
-    image: homeall/caddy-reverse-proxy-cloudflare:latest
-    ports:
-      - 80:80
-      - 443:443
+    image: homeall/caddy-reverse-proxy-cloudflare:2025.05.06
     environment:
       - CADDY_INGRESS_NETWORKS=caddy
     labels:
       caddy.email: $CF_EMAIL
-      caddy.acme_dns: "cloudflare $CF_API_TOKEN"
-      caddy_0: ${HOSTNAME}.${DOMAIN}
-      caddy_0.reverse_proxy: ${HOSTNAME}.${DOMAIN}:5000
-    networks:
-      - caddy
+      caddy.acme_dns: "cloudflare {env.CF_API_TOKEN}"
+      caddy.log:
+      caddy.log.include: http.log.access
+      caddy.log.level: WARN
+      caddy_0: (internal)
+      caddy_0.@internal: remote_ip private_ranges
+      caddy_0.@external: not remote_ip private_ranges
+      caddy_0.reverse_proxy: "@internal {args[:]}"
+      caddy_0.respond: "@external `Forbidden` 403"
+      caddy_1: ${HOSTNAME}.${DOMAIN}
+      caddy_1.import: internal ${HOSTNAME}.${DOMAIN}:5000
+      org.hotio.pullio.update: ${PULLIO_UPDATE}
+    network_mode: host
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - caddyData:/data
@@ -22,13 +27,19 @@ services:
   # Radarr - https://hotio.dev/containers/radarr/
   radarr:
     container_name: radarr
-    image: ghcr.io/hotio/radarr:latest
+    image: ghcr.io/hotio/radarr:release
+    depends_on:
+      - qbittorrent
     extends:
       file: xbase.yml
       service: x-base
     labels:
       caddy: radarr.${DOMAIN}
-      caddy.reverse_proxy: "{{upstreams http 7878}}"
+      caddy.import: internal "{{upstreams 7878}}"
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "https://radarr.${DOMAIN}/ping" ]
+      interval: 1m
+      start_period: 30s
     networks:
       - caddy
     volumes:
@@ -38,13 +49,19 @@ services:
   # Sonarr - https://hotio.dev/containers/sonarr/
   sonarr:
     container_name: sonarr
-    image: ghcr.io/hotio/sonarr:latest
+    image: ghcr.io/hotio/sonarr:release
     extends:
       file: xbase.yml
       service: x-base
+    depends_on:
+      - qbittorrent
     labels:
       caddy: sonarr.${DOMAIN}
-      caddy.reverse_proxy: "{{upstreams 8989}}"
+      caddy.import: internal "{{upstreams 8989}}"
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "https://sonarr.${DOMAIN}/ping" ]
+      interval: 1m
+      start_period: 30s
     networks:
       - caddy
     volumes:
@@ -58,9 +75,12 @@ services:
     extends:
       file: xbase.yml
       service: x-base
+    depends_on:
+      - sonarr
+      - radarr
     labels:
       caddy: bazarr.${DOMAIN}
-      caddy.reverse_proxy: "{{upstreams 6767}}"
+      caddy.import: internal "{{upstreams 6767}}"
     networks:
       - caddy
     volumes:
@@ -76,7 +96,7 @@ services:
       service: x-base
     labels:
       caddy: qbit.${DOMAIN}
-      caddy.reverse_proxy: "{{upstreams $QBITTORRENT_WEBUI_PORT}}"
+      caddy.import: internal "{{upstreams ${QBITTORRENT_WEBUI_PORT}}}"
     networks:
       - caddy
     cap_add:
@@ -104,9 +124,13 @@ services:
     extends:
       file: xbase.yml
       service: x-base
+    depends_on:
+      - sonarr
+      - radarr
+      - readarr
     labels:
       caddy: prowlarr.${DOMAIN}
-      caddy.reverse_proxy: "{{upstreams 9696}}"
+      caddy.import: internal "{{upstreams 9696}}"
     networks:
       - caddy
     environment:
@@ -121,6 +145,7 @@ services:
     extends:
       file: xbase.yml
       service: x-base
+    network_mode: none
     volumes:
       - ${DOCKERCONFDIR}/unpackerr:/config
       - ${DOCKERSTORAGEDIR}:/data
@@ -130,13 +155,15 @@ services:
   # Readarr - https://hotio.dev/containers/readarr/
   readarr:
     container_name: readarr
-    image: ghcr.io/hotio/readarr
+    image: ghcr.io/hotio/readarr:latest
     extends:
       file: xbase.yml
       service: x-base
+    depends_on:
+      - qbittorrent
     labels:
       caddy: readarr.${DOMAIN}
-      caddy.reverse_proxy: "{{upstreams 8787}}"
+      caddy.import: internal "{{upstreams 8787}}"
     networks:
       - caddy
     volumes:
@@ -152,10 +179,11 @@ services:
       service: x-base
     labels:
       caddy: jellyfin.${DOMAIN}
-      caddy.reverse_proxy: "{{upstreams 8096}}"
-      # This fixes the Jellyfin app on WebOS
-      caddy.header: -X-Frame-Options
-      caddy.header.defer:
+      caddy.import: internal "{{upstreams 8096}}"
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "https://jellyfin.${DOMAIN}/health" ]
+      interval: 1m
+      start_period: 30s
     networks:
       - caddy
     volumes:
@@ -166,13 +194,15 @@ services:
 
   jellyseerr:
     container_name: jellyseerr
-    image: ghcr.io/hotio/jellyseerr
+    image: ghcr.io/hotio/jellyseerr:release
     extends:
       file: xbase.yml
       service: x-base
+    depends_on:
+      - jellyfin
     labels:
       caddy: jellyseerr.${DOMAIN}
-      caddy.reverse_proxy: "{{upstreams 5055}}"
+      caddy.import: internal "{{upstreams 5055}}"
     networks:
       - caddy
     volumes:
