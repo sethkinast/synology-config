@@ -1,15 +1,12 @@
 services:
   caddy:
     container_name: caddy
-    image: homeall/caddy-reverse-proxy-cloudflare:2025.05.06
+    image: homeall/caddy-reverse-proxy-cloudflare:2025.10.21
     environment:
       - CADDY_INGRESS_NETWORKS=caddy
     labels:
       caddy.email: $CF_EMAIL
-      caddy.acme_dns: "cloudflare {env.CF_API_TOKEN}"
-      caddy.log:
-      caddy.log.include: http.log.access
-      caddy.log.level: WARN
+      caddy.acme_dns: "cloudflare ${CF_API_TOKEN}"
       caddy_0: (internal)
       caddy_0.@internal: remote_ip private_ranges
       caddy_0.@external: not remote_ip private_ranges
@@ -68,6 +65,27 @@ services:
       - ${DOCKERCONFDIR}/sonarr:/config
       - ${DOCKERSTORAGEDIR}:/data
 
+  lidarr:
+    container_name: lidarr
+    image: ghcr.io/hotio/lidarr:release
+    extends:
+      file: xbase.yml
+      service: x-base
+    depends_on:
+      - qbittorrent
+    labels:
+      caddy: lidarr.${DOMAIN}
+      caddy.import: internal "{{upstreams 8686}}"
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "https://lidarr.${DOMAIN}/ping" ]
+      interval: 1m
+      start_period: 30s
+    networks:
+      - caddy
+    volumes:
+      - ${DOCKERCONFDIR}/lidarr:/config
+      - ${DOCKERSTORAGEDIR}:/data
+
   # Bazarr - https://hotio.dev/containers/bazarr/
   bazarr:
     container_name: bazarr
@@ -90,7 +108,7 @@ services:
   # qBittorrent - https://hotio.dev/containers/qbittorrent
   qbittorrent:
     container_name: qbittorrent
-    image: ghcr.io/hotio/qbittorrent:release
+    image: ghcr.io/hotio/qbittorrent:release-5.1.4
     extends:
       file: xbase.yml
       service: x-base
@@ -127,7 +145,6 @@ services:
     depends_on:
       - sonarr
       - radarr
-      - readarr
     labels:
       caddy: prowlarr.${DOMAIN}
       caddy.import: internal "{{upstreams 9696}}"
@@ -149,37 +166,17 @@ services:
     volumes:
       - ${DOCKERCONFDIR}/unpackerr:/config
       - ${DOCKERSTORAGEDIR}:/data
-    security_opt:
-      - no-new-privileges:true
-
-  # Readarr - https://hotio.dev/containers/readarr/
-  readarr:
-    container_name: readarr
-    image: ghcr.io/hotio/readarr:latest
-    extends:
-      file: xbase.yml
-      service: x-base
-    depends_on:
-      - qbittorrent
-    labels:
-      caddy: readarr.${DOMAIN}
-      caddy.import: internal "{{upstreams 8787}}"
-    networks:
-      - caddy
-    volumes:
-      - ${DOCKERCONFDIR}/readarr:/config
-      - ${DOCKERSTORAGEDIR}:/data
 
   # Jellyfin - https://hotio.dev/containers/jellyfin/
   jellyfin:
     container_name: jellyfin
-    image: ghcr.io/hotio/jellyfin:release
+    image: ghcr.io/hotio/jellyfin:release-10.11.4
     extends:
       file: xbase.yml
       service: x-base
     labels:
       caddy: jellyfin.${DOMAIN}
-      caddy.import: internal "{{upstreams 8096}}"
+      caddy.reverse_proxy: "{{upstreams 8096}}"
     healthcheck:
       test: [ "CMD", "curl", "--fail", "https://jellyfin.${DOMAIN}/health" ]
       interval: 1m
@@ -202,12 +199,37 @@ services:
       - jellyfin
     labels:
       caddy: jellyseerr.${DOMAIN}
-      caddy.import: internal "{{upstreams 5055}}"
+      caddy.reverse_proxy: "{{upstreams 5055}}"
     networks:
       - caddy
     volumes:
       - ${DOCKERCONFDIR}/jellyseerr:/config
       - ${DOCKERSTORAGEDIR}/media:/data/media
+
+  mealie:
+    container_name: mealie
+    image: ghcr.io/mealie-recipes/mealie:v3.3.2
+    extends:
+      file: xbase.yml
+      service: x-base
+    labels:
+      caddy: mealie.${DOMAIN}
+      caddy.reverse_proxy: "{{upstreams 9000}}"
+    deploy:
+      resources:
+        limits:
+          memory: 1000M
+    networks:
+      - caddy
+    volumes:
+      - ${DOCKERCONFDIR}/mealie:/app/data
+    environment:
+      ALLOW_SIGNUP: false
+      BASE_URL: https://mealie.${DOMAIN}
+      SMTP_HOST: ${MEALIE_SMTP_HOST}
+      SMTP_FROM_EMAIL: ${MEALIE_SMTP_USER}
+      SMTP_USER: ${MEALIE_SMTP_USER}
+      SMTP_PASSWORD: ${MEALIE_SMTP_PASSWORD}
 
 networks:
   caddy:

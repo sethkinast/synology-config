@@ -18,3 +18,12 @@ services:
       - UMASK=002
     volumes:
       - /etc/localtime:/etc/localtime:ro
+    extra_hosts:
+      - "radarr.${DOMAIN}:host-gateway"
+      - "sonarr.${DOMAIN}:host-gateway"
+      - "lidarr.${DOMAIN}:host-gateway"
+      - "bazarr.${DOMAIN}:host-gateway"
+      - "prowlarr.${DOMAIN}:host-gateway"
+      - "jellyfin.${DOMAIN}:host-gateway"
+      - "jellyseerr.${DOMAIN}:host-gateway"
+      - "mealie.${DOMAIN}:host-gateway"
