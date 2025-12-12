@@ -191,7 +191,7 @@ services:
 
   jellyseerr:
     container_name: jellyseerr
-    image: ghcr.io/hotio/jellyseerr:release
+    image: ghcr.io/hotio/seerr:release-2.7.3
     extends:
       file: xbase.yml
       service: x-base
@@ -208,7 +208,7 @@ services:
 
   mealie:
     container_name: mealie
-    image: ghcr.io/mealie-recipes/mealie:v3.3.2
+    image: ghcr.io/mealie-recipes/mealie:v3.6.1
     extends:
       file: xbase.yml
       service: x-base
