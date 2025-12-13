@@ -21,6 +21,34 @@ services:
       - caddyData:/data
     restart: unless-stopped
 
+  gluetun:
+    container_name: gluetun
+    image: qmcgaw/gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+      - net.ipv6.conf.all.disable_ipv6=1
+    environment:
+      - VPN_SERVICE_PROVIDER=airvpn
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
+      - WIREGUARD_PRESHARED_KEY=${WIREGUARD_PRESHARED_KEY}
+      - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES}
+      - SERVER_COUNTRIES=United States,Canada
+      - FIREWALL_VPN_INPUT_PORTS=${QBITTORRENT_VPN_PORT}
+    ports:
+      - ${QBITTORRENT_WEBUI_PORT}:${QBITTORRENT_WEBUI_PORT}
+      - ${QBITTORRENT_VPN_PORT}:${QBITTORRENT_VPN_PORT}
+      - ${QBITTORRENT_VPN_PORT}:${QBITTORRENT_VPN_PORT}/udp
+    networks:
+      - caddy
+    labels:
+      caddy: qbit.${DOMAIN}
+      caddy.import: internal "{{upstreams ${QBITTORRENT_WEBUI_PORT}}}"
+
   # Radarr - https://hotio.dev/containers/radarr/
   radarr:
     container_name: radarr
@@ -111,25 +139,12 @@ services:
     image: ghcr.io/hotio/qbittorrent:release-5.1.4
     extends:
       file: xbase.yml
-      service: x-base
-    labels:
-      caddy: qbit.${DOMAIN}
-      caddy.import: internal "{{upstreams ${QBITTORRENT_WEBUI_PORT}}}"
-    networks:
-      - caddy
-    cap_add:
-      - NET_ADMIN
-    devices:
-      - /dev/net/tun:/dev/net/tun
-    sysctls:
-      - net.ipv4.conf.all.src_valid_mark=1
-      - net.ipv6.conf.all.disable_ipv6=1 # Optional, if you want to use ipv6, remove this line. If you keep this line, make sure there is no ipv6 in your wg0.conf.
+      service: x-core
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    network_mode: service:gluetun
     environment:
-      - VPN_ENABLED=${VPN_ENABLED}
-      - VPN_CONF=wg0-fix
-      - VPN_PROVIDER=generic
-      - VPN_LAN_NETWORK=${VPN_LAN_NETWORK}
-      - VPN_NAMESERVERS=wg
       - WEBUI_PORTS=${QBITTORRENT_WEBUI_PORT}/tcp,${QBITTORRENT_WEBUI_PORT}/udp
     volumes:
       - ${DOCKERCONFDIR}/qbittorrent:/config:rw
@@ -191,7 +206,7 @@ services:
 
   jellyseerr:
     container_name: jellyseerr
-    image: ghcr.io/hotio/seerr:release-2.7.3
+    image: ghcr.io/hotio/seerr:release
     extends:
       file: xbase.yml
       service: x-base

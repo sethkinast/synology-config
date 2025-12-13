@@ -1,5 +1,5 @@
 services:
-  x-base:
+  x-core:
     image: alpine:latest
     restart: unless-stopped
     labels:
@@ -18,7 +18,11 @@ services:
       - UMASK=002
     volumes:
       - /etc/localtime:/etc/localtime:ro
+  x-base:
+    extends:
+      service: x-core
     extra_hosts:
+      - "qbit.${DOMAIN}:host-gateway"
       - "radarr.${DOMAIN}:host-gateway"
       - "sonarr.${DOMAIN}:host-gateway"
       - "lidarr.${DOMAIN}:host-gateway"
