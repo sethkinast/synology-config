@@ -37,7 +37,7 @@ services:
       - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
       - WIREGUARD_PRESHARED_KEY=${WIREGUARD_PRESHARED_KEY}
       - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES}
-      - SERVER_COUNTRIES=United States,Canada
+      - SERVER_HOSTNAMES=ca.vpn.airdns.org,us.vpn.airdns.org
       - FIREWALL_VPN_INPUT_PORTS=${QBITTORRENT_VPN_PORT}
     ports:
       - ${QBITTORRENT_WEBUI_PORT}:${QBITTORRENT_WEBUI_PORT}
@@ -48,6 +48,7 @@ services:
     labels:
       caddy: qbit.${DOMAIN}
       caddy.import: internal "{{upstreams ${QBITTORRENT_WEBUI_PORT}}}"
+    restart: always
 
   # Radarr - https://hotio.dev/containers/radarr/
   radarr:
@@ -136,7 +137,7 @@ services:
   # qBittorrent - https://hotio.dev/containers/qbittorrent
   qbittorrent:
     container_name: qbittorrent
-    image: ghcr.io/hotio/qbittorrent:release-5.1.4
+    image: ghcr.io/hotio/qbittorrent:release
     extends:
       file: xbase.yml
       service: x-core
