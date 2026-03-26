@@ -19,7 +19,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - caddyData:/data
-    restart: unless-stopped
+    restart: always
 
   gluetun:
     container_name: gluetun
@@ -49,6 +49,9 @@ services:
       caddy: qbit.${DOMAIN}
       caddy.import: internal "{{upstreams ${QBITTORRENT_WEBUI_PORT}}}"
     restart: always
+    stop_grace_period: 30s
+    healthcheck:
+      start_period: 1m
 
   # Radarr - https://hotio.dev/containers/radarr/
   radarr:
@@ -145,6 +148,10 @@ services:
       gluetun:
         condition: service_healthy
     network_mode: service:gluetun
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "https://1.1.1.1/help" ]
+      interval: 1m
+      start_period: 30s
     environment:
       - WEBUI_PORTS=${QBITTORRENT_WEBUI_PORT}/tcp,${QBITTORRENT_WEBUI_PORT}/udp
     volumes:
@@ -186,7 +193,7 @@ services:
   # Jellyfin - https://hotio.dev/containers/jellyfin/
   jellyfin:
     container_name: jellyfin
-    image: ghcr.io/hotio/jellyfin:release-10.11.4
+    image: ghcr.io/hotio/jellyfin:release-v10.11
     extends:
       file: xbase.yml
       service: x-base
@@ -224,7 +231,7 @@ services:
 
   mealie:
     container_name: mealie
-    image: ghcr.io/mealie-recipes/mealie:v3.6.1
+    image: ghcr.io/mealie-recipes/mealie:v3.10.2
     extends:
       file: xbase.yml
       service: x-base
@@ -246,6 +253,17 @@ services:
       SMTP_FROM_EMAIL: ${MEALIE_SMTP_USER}
       SMTP_USER: ${MEALIE_SMTP_USER}
       SMTP_PASSWORD: ${MEALIE_SMTP_PASSWORD}
+
+  autoheal:
+    container_name: autoheal
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: all
+    image: willfarrell/autoheal:latest
+    network_mode: none
+    restart: always
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock
 
 networks:
   caddy:
